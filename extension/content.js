@@ -8,24 +8,57 @@ var rank={allow:0,warn:1,redact:2,block:3};
 var bypassUntil=0,bypassText='';
 chrome.storage.local.get(defaults,function(x){policies=Object.assign({},defaults,x)});
 chrome.storage.onChanged.addListener(function(changes,area){if(area!=='local')return;Object.keys(defaults).forEach(function(k){if(changes[k])policies[k]=changes[k].newValue})});
+
+var HOST_SELECTORS={
+ 'chatgpt.com':['#prompt-textarea','textarea#mobile-composer-prompt','textarea[data-id="root"]','div[contenteditable="true"][data-virtualkeyboard="true"]','div[contenteditable="true"].ProseMirror','form textarea'],
+ 'claude.ai':['div[contenteditable="true"].ProseMirror','fieldset div[contenteditable="true"]','div[contenteditable="true"]','textarea'],
+ 'gemini.google.com':['div[contenteditable="true"].ql-editor','rich-textarea div[contenteditable="true"]','rich-textarea textarea','textarea']
+};
+var EDITABLE_SEL='textarea,[contenteditable="true"],input[type="text"]';
+var SEND_SELECTORS=['button[data-testid="send-button"]','button[data-testid*="send" i]','button[aria-label*="send" i]','form button[type="submit"]'];
+
+function visible(e){var r=e.getBoundingClientRect();return r.width>20&&r.height>10&&r.bottom>0&&r.top<(window.innerHeight||800)}
+function editables(){var out=[];var nodes=document.querySelectorAll(EDITABLE_SEL);for(var i=0;i<nodes.length;i++){if(visible(nodes[i]))out.push(nodes[i])}return out}
 function editor(){
- var host=location.hostname;
- var selectors=host==='chatgpt.com'?['#prompt-textarea','textarea[data-id="root"]','div[contenteditable="true"][data-virtualkeyboard="true"]']:
- host==='claude.ai'?['div[contenteditable="true"].ProseMirror','div[contenteditable="true"]']:
- ['div[contenteditable="true"].ql-editor','rich-textarea div[contenteditable="true"]','textarea'];
- for(var i=0;i<selectors.length;i++){var e=document.querySelector(selectors[i]);if(e&&visible(e))return e}return null;
+ var pref=HOST_SELECTORS[location.hostname]||[];
+ for(var i=0;i<pref.length;i++){var e=document.querySelector(pref[i]);if(e&&visible(e))return e}
+ // Generic fallback: the visible editable closest to the bottom of the viewport - prompt composers sit at the bottom.
+ var all=editables(),best=null,bestBottom=-1;
+ for(var j=0;j<all.length;j++){var r=all[j].getBoundingClientRect();if(r.bottom>bestBottom){bestBottom=r.bottom;best=all[j]}}
+ return best;
 }
-function visible(e){var r=e.getBoundingClientRect();return r.width>20&&r.height>10}
+function isComposer(el){
+ if(!el||!el.matches)return false;
+ var ed=editor();
+ if(ed&&(ed===el||ed.contains(el)))return true;
+ return el.matches(EDITABLE_SEL)&&visible(el);
+}
+function matchesAny(el,sels){for(var i=0;i<sels.length;i++){try{if(el.matches(sels[i]))return true}catch(e){}}return false}
+function isSendButton(b){return b&&!b.disabled&&visible(b)&&matchesAny(b,SEND_SELECTORS)}
+function sendButtons(){var out=[];var nodes=document.querySelectorAll(SEND_SELECTORS.join(','));for(var i=0;i<nodes.length;i++){if(!nodes[i].disabled&&visible(nodes[i]))out.push(nodes[i])}return out}
+function pickSendButton(ed){
+ var btns=sendButtons();if(!btns.length)return null;
+ var form=ed&&ed.closest?ed.closest('form'):null;
+ for(var i=0;i<btns.length;i++){if(form&&form.contains(btns[i]))return btns[i]}
+ if(ed){var er=ed.getBoundingClientRect(),best=null,bestDist=Infinity;
+  for(var j=0;j<btns.length;j++){var br=btns[j].getBoundingClientRect();var d=Math.abs(br.top-er.top)+Math.abs(br.left-er.right);if(d<bestDist){bestDist=d;best=btns[j]}}
+  return best}
+ return btns[0];
+}
 function textOf(e){return e?(e.tagName==='TEXTAREA'||e.tagName==='INPUT'?e.value:(e.innerText||e.textContent||'')):''}
 function setText(e,text){e.focus();if(e.tagName==='TEXTAREA'||e.tagName==='INPUT'){var setter=Object.getOwnPropertyDescriptor(e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set;setter.call(e,text);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}))}else{e.textContent=text;e.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:text}))}}
 function actionFor(findings){var a='allow';findings.forEach(function(f){var p=policies[f.category]||'warn';if(rank[p]>rank[a])a=p});return a}
-function supportedSubmit(target){if(!target||!target.closest)return false;var b=target.closest('button');if(!b)return false;var host=location.hostname;var tests=host==='chatgpt.com'?['[data-testid="send-button"]','[aria-label*="Send"]']:
- host==='claude.ai'?['button[aria-label*="Send"]','button[data-testid*="send"]']:
- ['button[aria-label*="Send"]','button.send-button'];return tests.some(function(s){try{return b.matches(s)}catch(e){return false}})&&!!editor()}
 function attempt(e){var ed=editor();if(!ed)return;var text=textOf(ed).trim();if(!text)return;if(Date.now()<bypassUntil&&text===bypassText)return;var findings=D.scan(text).findings;if(!findings.length)return;var action=actionFor(findings);if(action==='allow')return;e.preventDefault();e.stopImmediatePropagation();show(action,findings,text,ed)}
-document.addEventListener('click',function(e){if(supportedSubmit(e.target))attempt(e)},true);
-document.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&editor()&&editor().contains(e.target))attempt(e)},true);
-function resume(ed,text){bypassText=text;bypassUntil=Date.now()+1600;var host=location.hostname;var selectors=host==='chatgpt.com'?['[data-testid="send-button"]','button[aria-label*="Send"]']:host==='claude.ai'?['button[aria-label*="Send"]','button[data-testid*="send"]']:['button[aria-label*="Send"]','button.send-button'];for(var i=0;i<selectors.length;i++){var b=document.querySelector(selectors[i]);if(b&&!b.disabled&&visible(b)){b.click();return}}ed.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true}))}
+
+// Send-button clicks (icon clicks land inside the button, so walk up).
+document.addEventListener('click',function(e){var b=e.target&&e.target.closest?e.target.closest('button'):null;if(b&&isSendButton(b))attempt(e)},true);
+// Enter-to-send. window capture runs before the page's own handlers.
+window.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&isComposer(e.target))attempt(e)},true);
+// Safety nets: newline insertion and any real form submit from the composer.
+window.addEventListener('beforeinput',function(e){if(e.inputType==='insertParagraph'&&isComposer(e.target))attempt(e)},true);
+document.addEventListener('submit',function(e){var ed=editor();if(ed&&e.target&&e.target.contains&&e.target.contains(ed))attempt(e)},true);
+
+function resume(ed,text){bypassText=text;bypassUntil=Date.now()+1600;var b=pickSendButton(ed);if(b){b.click();return}ed.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true,cancelable:true}))}
 function show(action,findings,text,ed){close();var wrap=document.createElement('div');wrap.className='dato-backdrop';wrap.id='dato-modal';var labels={block:['Blocked by policy','Remove the flagged data before sending.'],warn:['Confidential data detected','Review the findings before choosing to send.'],redact:['Redaction required','Dato can replace the detected values before sending.']};var rows=findings.slice(0,6).map(function(f){return '<div class="dato-finding"><b>'+esc(f.label)+'</b><code>'+esc(f.masked)+'</code></div>'}).join('');var more=findings.length>6?'<div class="dato-more">+'+(findings.length-6)+' more finding'+(findings.length-6===1?'':'s')+'</div>':'';var buttons='<button class="dato-btn" data-dato="cancel">Go back</button>';
  if(action==='warn')buttons+='<button class="dato-btn dato-btn-danger" data-dato="send">Send anyway</button>';
  if(action==='redact')buttons+='<button class="dato-btn dato-btn-primary" data-dato="redact">Redact &amp; send</button>';
