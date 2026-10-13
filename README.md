@@ -4,6 +4,25 @@
 
 Dato is a local-first AI data-leak firewall. It inspects prompts and files **before** they reach ChatGPT, Claude, or any other LLM, detects confidential content, and applies your policy: **warn**, **redact**, or **block**. Every inspection runs entirely in the browser — no prompt, file, or audit event is ever transmitted.
 
+**Live:** https://roycemy.github.io/Dato/
+
+## How to use
+
+1. **Firewall tab:** paste a prompt or attach text files, then press **Inspect locally** (or Ctrl/Cmd + Enter in the prompt box). Dato shows what it found and what your policy says to do.
+2. **Policies tab:** set Allow / Warn / Redact / Block for each data class and inspect again to see the verdict change. **Reset everything** restores defaults and clears the log.
+3. **Audit log tab:** filter events, export them as JSON, or clear them.
+4. **Risk dashboard tab:** totals and charts computed from the log.
+
+Empty or invalid input (nothing to inspect, file over 2 MB, unreadable file) shows a message in the page. Nothing uses pop-up dialogs.
+
+## Where the agent differed from what I expected
+
+> TODO (write one line in your own words once you have checked the finished tool against PROPOSAL.md).
+
+## Required question: AI output I did not accept as-is
+
+> TODO: pick one specific commit (hash), say what the agent gave you, what you changed, and how you knew it needed changing. If the output was fine first time, say how you verified it.
+
 ## Chrome extension
 
 An installable Manifest V3 extension is in [`extension/`](extension/README.md). It protects prompts on ChatGPT, Claude, and Gemini before submission, with local warn, redact, and block controls. See the extension README for same-day installation and a synthetic test.
@@ -48,7 +67,7 @@ Or just open `index.html` in a browser.
 | `styles.css` | Brand and component system |
 | `extension/` | Installable Chrome extension and testing instructions |
 
-State (policies, audit log) lives in `localStorage`. Clearing site data resets everything.
+State lives in `app.js`: `policies` (object, class to action), `events` (audit log array) and `attachedFiles`. Policies and events are saved to `localStorage`; clearing site data or pressing Reset everything wipes them. Planning docs: [PROPOSAL.md](PROPOSAL.md), [PRD.md](PRD.md), [DESIGN.md](DESIGN.md), [AGENTS.md](AGENTS.md).
 
 ## Safety & scope
 

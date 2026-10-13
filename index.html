@@ -56,18 +56,20 @@
               accept=".txt,.md,.markdown,.csv,.json,.js,.ts,.py,.java,.go,.rb,.sh,.yaml,.yml,.xml,.html,.css,.sql,.log,.env,.ini,.cfg,.conf">
           </label>
         </div>
-        <textarea id="prompt-input" class="prompt-input" spellcheck="false"
+        <label for="prompt-input" class="sr-only">Prompt to inspect</label>
+        <textarea id="prompt-input" class="prompt-input" spellcheck="false" aria-describedby="form-error"
           placeholder="Paste the prompt an employee is about to send to ChatGPT, Claude, or any AI tool…"></textarea>
+        <p id="form-error" class="form-error" role="alert" hidden></p>
         <div id="attachments" class="attachments"></div>
         <div class="console-actions">
-          <button id="scan-btn" class="btn btn-primary">Inspect locally</button>
+          <button id="scan-btn" class="btn btn-primary" title="Shortcut: Ctrl/Cmd + Enter">Inspect locally</button>
           <button id="send-btn" class="btn btn-secondary">Send to AI (simulated)</button>
           <button id="clear-btn" class="btn btn-ghost">Clear</button>
         </div>
       </div>
       <div class="panel">
         <div class="panel-head"><span class="panel-title">Inspection result</span><span class="local-badge">on-device</span></div>
-        <div id="scan-result" class="scan-result">
+        <div id="scan-result" class="scan-result" aria-live="polite">
           <div class="empty-state">Paste a prompt or attach a file to inspect it before it reaches an AI tool.</div>
         </div>
       </div>
@@ -81,6 +83,10 @@
       <p class="lede">Decide what happens per data class. <b>Warn</b> educates in the moment, <b>Redact</b> strips the data and keeps the workflow, <b>Block</b> stops the send entirely.</p>
     </div>
     <div class="panel"><div id="policy-list"></div></div>
+    <div class="reset-row">
+      <button id="reset-all" class="btn btn-ghost danger">Reset everything</button>
+      <span class="reset-note">Restores default policies, clears the audit log and the prompt box.</span>
+    </div>
   </section>
 
   <!-- ACTIVITY -->
@@ -114,6 +120,7 @@
       <h1>Risk dashboard</h1>
       <p class="lede">What your AI usage would have leaked, and what your policies stopped.</p>
     </div>
+    <p id="dash-empty" class="empty-state dash-empty" hidden>No data yet. Inspect a prompt on the Firewall tab and this dashboard fills in.</p>
     <div class="stat-grid">
       <div class="stat-card"><div class="stat-num" id="stat-scans">0</div><div class="stat-label">Inspections</div></div>
       <div class="stat-card"><div class="stat-num" id="stat-findings">0</div><div class="stat-label">Findings caught</div></div>
@@ -139,7 +146,7 @@
       <div class="panel">
         <div class="panel-head"><span class="panel-title">Current posture</span></div>
         <div id="posture-line" class="posture"></div>
-        <p class="posture-note">Adjust per-class enforcement in <a href="#policies" onclick="document.getElementById('nav-policies').click();return false;">Policies</a>.</p>
+        <p class="posture-note">Adjust per-class enforcement in <a href="#policies" id="goto-policies">Policies</a>.</p>
       </div>
     </div>
   </section>

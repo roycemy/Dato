@@ -292,3 +292,25 @@ body {
   .safety-strip { padding: 8px 16px; }
   .view-head h1 { font-size: 24px; }
 }
+
+/* ---- States: invalid input, armed confirm, reset ---- */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.form-error {
+  margin: 10px 0 0; padding: 10px 12px; font-size: 13.5px; color: var(--red);
+  background: rgba(255,77,94,0.08); border: 1px solid rgba(255,77,94,0.45); border-radius: 10px;
+}
+.form-error[hidden], .dash-empty[hidden] { display: none; }
+.prompt-input.invalid { border-color: var(--red); }
+.btn.armed { color: var(--red); border-color: var(--red); background: rgba(255,77,94,0.08); }
+.reset-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 18px; }
+.reset-note { color: var(--muted); font-size: 13px; }
+
+/* ---- Phone ---- */
+.table-scroll { overflow-x: auto; }
+.toolbar { flex-wrap: wrap; }
+@media (max-width: 720px) {
+  .segmented { width: 100%; }
+  .seg-btn { flex: 1; padding: 10px 6px; }
+  .console-actions { flex-wrap: wrap; }
+  .panel { padding: 16px; }
+}

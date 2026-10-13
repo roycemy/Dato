@@ -51,12 +51,14 @@
   fileInput.addEventListener('change', function () {
     var files = Array.prototype.slice.call(fileInput.files || []);
     files.forEach(function (f) {
-      if (f.size > 2 * 1024 * 1024) { addAttachmentChip(f.name, null, 'too large (2 MB max)'); return; }
+      if (f.size > 2 * 1024 * 1024) { showFormError(f.name + ' is too large (2 MB max) and was not attached.'); return; }
       var reader = new FileReader();
       reader.onload = function () {
         attachedFiles.push({ name: f.name, text: String(reader.result || '') });
         addAttachmentChip(f.name, attachedFiles.length - 1);
+        showFormError('');
       };
+      reader.onerror = function () { showFormError(f.name + ' could not be read as text. Try a text-based file.'); };
       reader.readAsText(f);
     });
     fileInput.value = '';
@@ -73,6 +75,16 @@
     }
     document.getElementById('attachments').appendChild(chip);
   }
+
+  // ---------- Form feedback ----------
+  var EMPTY_RESULT = '<div class="empty-state">Paste a prompt or attach a file to inspect it before it reaches an AI tool.</div>';
+  function showFormError(msg) {
+    var box = document.getElementById('form-error');
+    box.textContent = msg;
+    box.hidden = !msg;
+    document.getElementById('prompt-input').classList.toggle('invalid', !!msg);
+  }
+  document.getElementById('prompt-input').addEventListener('input', function () { showFormError(''); });
 
   // ---------- Scanning ----------
   function severityRank(s) { return { critical: 4, high: 3, medium: 2, low: 1 }[s] || 0; }
@@ -116,9 +128,12 @@
     attachedFiles.forEach(function (f) { if (f) parts.push(f); });
     var resultBox = document.getElementById('scan-result');
     if (!parts.length) {
-      resultBox.innerHTML = '<div class="empty-state">Paste a prompt or attach a file to inspect it before it reaches an AI tool.</div>';
+      resultBox.innerHTML = EMPTY_RESULT;
+      showFormError('Nothing to inspect yet. Paste a prompt or attach a file first.');
+      document.getElementById('prompt-input').focus();
       return null;
     }
+    showFormError('');
     var combined = parts.map(function (p) { return p.text; }).join('\n\n');
     var scan = D.scan(combined);
     var findings = scan.findings;
@@ -216,13 +231,20 @@
     logEvent('simulated-send', [], 'sent-' + (btn.dataset.mode || 'send'));
     setTimeout(function () { scanNow(); }, 1600);
   });
-  document.getElementById('clear-btn').addEventListener('click', function () {
+  function clearConsole() {
     document.getElementById('prompt-input').value = '';
     attachedFiles = [];
     document.getElementById('attachments').innerHTML = '';
-    document.getElementById('scan-result').innerHTML = '<div class="empty-state">Paste a prompt or attach a file to inspect it before it reaches an AI tool.</div>';
+    document.getElementById('scan-result').innerHTML = EMPTY_RESULT;
+    showFormError('');
     var sendBtn = document.getElementById('send-btn');
     sendBtn.disabled = false; sendBtn.textContent = 'Send to AI (simulated)';
+    sendBtn.dataset.mode = 'send';
+  }
+  document.getElementById('clear-btn').addEventListener('click', clearConsole);
+  // Keyboard: Ctrl/Cmd + Enter inspects, from anywhere in the prompt box
+  document.getElementById('prompt-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); scanNow(); }
   });
 
   // ---------- Policies ----------
@@ -273,14 +295,14 @@
       wrap.innerHTML = '<div class="empty-state">No events yet. Scans, policy decisions, and simulated sends appear here for audit.</div>';
       return;
     }
-    var html = '<table class="log-table"><thead><tr><th>Time</th><th>Source</th><th>Findings</th><th>Worst severity</th><th>Action</th></tr></thead><tbody>';
+    var html = '<div class="table-scroll"><table class="log-table"><thead><tr><th>Time</th><th>Source</th><th>Findings</th><th>Worst severity</th><th>Action</th></tr></thead><tbody>';
     list.forEach(function (e) {
       var d = new Date(e.ts);
       html += '<tr><td class="mono">' + d.toLocaleString() + '</td><td>' + escapeHTML(e.source) + '</td>' +
         '<td>' + (e.total || '—') + '</td><td><span class="sev sev-' + e.topSeverity + '">' + (e.total ? e.topSeverity.toUpperCase() : '—') + '</span></td>' +
         '<td><span class="action-tag action-' + String(e.action).replace(/[^a-z-]/g, '') + '">' + escapeHTML(e.action) + '</span></td></tr>';
     });
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     wrap.innerHTML = html;
   }
   document.getElementById('activity-filter').addEventListener('change', renderActivity);
@@ -292,9 +314,24 @@
     a.click();
     URL.revokeObjectURL(a.href);
   });
-  document.getElementById('clear-log').addEventListener('click', function () {
-    if (!confirm('Clear the local audit log?')) return;
+  // Two-step button: first click arms it, second click within 4s runs it (no alert/confirm boxes)
+  function armedButton(id, armedLabel, action) {
+    var btn = document.getElementById(id), label = btn.textContent, timer = null;
+    function disarm() { clearTimeout(timer); btn.textContent = label; btn.classList.remove('armed'); }
+    btn.addEventListener('click', function () {
+      if (btn.classList.contains('armed')) { disarm(); action(); return; }
+      btn.textContent = armedLabel; btn.classList.add('armed');
+      timer = setTimeout(disarm, 4000);
+    });
+  }
+  armedButton('clear-log', 'Click again to confirm', function () {
     events = []; saveEvents(); renderActivity();
+  });
+  armedButton('reset-all', 'Click again to reset everything', function () {
+    policies = Object.assign({}, DEFAULT_POLICIES); savePolicies();
+    events = []; saveEvents();
+    clearConsole(); renderPolicies(); renderActivity(); renderDashboard();
+    showView('firewall');
   });
 
   // ---------- Dashboard ----------
@@ -305,6 +342,7 @@
     var redacted = events.filter(function (e) { return e.action === 'redact'; }).length;
     var clean = events.filter(function (e) { return e.action === 'allowed-clean' || e.action === 'allow'; }).length;
     var findingsTotal = events.reduce(function (s, e) { return s + (e.total || 0); }, 0);
+    document.getElementById('dash-empty').hidden = events.length > 0;
     setStat('stat-scans', scans.length);
     setStat('stat-findings', findingsTotal);
     setStat('stat-blocked', blocked);
@@ -365,6 +403,9 @@
   function legendDot(color, label, n) {
     return '<span class="legend-item"><span class="legend-dot" style="background:' + color + '"></span>' + label + ' <b>' + n + '</b></span>';
   }
+
+  var policiesLink = document.getElementById('goto-policies');
+  policiesLink.addEventListener('click', function (e) { e.preventDefault(); showView('policies'); });
 
   // ---------- Boot ----------
   renderPolicies();
