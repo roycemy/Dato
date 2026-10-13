@@ -10,7 +10,8 @@
     pii:       { label: 'Personal Data (PII)',   weight: 2 },
     financial: { label: 'Financial Data',        weight: 2 },
     source:    { label: 'Proprietary Source Code', weight: 2 },
-    contract:  { label: 'Contracts & Legal',     weight: 1 }
+    contract:  { label: 'Contracts & Legal',     weight: 1 },
+    sensitive: { label: 'Sensitive Context',     weight: 1 }
   };
 
   var SEVERITY_ORDER = { critical: 4, high: 3, medium: 2, low: 1 };
@@ -43,7 +44,30 @@
     { id: 'basic-auth-url', category: 'secrets', severity: 'high', label: 'Credentials in URL',
       pattern: /https?:\/\/[^/\s:@]+:[^/\s@]+@[^/\s]+/gi },
 
+    // ---- Broadened coverage: tentative rules warn instead of hard-blocking ----
+    { id: 'partial-aws-key', category: 'secrets', severity: 'medium', tentative: true, label: 'Partial or shortened AWS-style key ID',
+      pattern: /\b(?:AKIA|ASIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA)[0-9A-Z]{8,15}\b/g },
+    { id: 'partial-openai-key', category: 'secrets', severity: 'medium', tentative: true, label: 'Partial or shortened OpenAI-style key',
+      pattern: /\bsk-(?:proj-|ant-)?[A-Za-z0-9_\-]{8,23}\b/g },
+    { id: 'credential-named', category: 'secrets', severity: 'high', tentative: true, label: 'Credential named in plain language',
+      pattern: /\b(?:password|passcode|passphrase|pin|api[ _-]?key|secret[ _-]?key|access[ _-]?token|auth[ _-]?token|session[ _-]?token|private[ _-]?key|ssn|social security(?:\s*number)?|credit[ _-]?card(?:\s*number)?|card[ _-]?number|cvv|cvc|security[ _-]?code|routing[ _-]?number|bank[ _-]?account(?:\s*number)?)\b\s*(?:is|=|:|->|-)\s*[^\s,;]{3,}/gi },
+    { id: 'unknown-token', category: 'secrets', severity: 'medium', tentative: true, label: 'Possible key or token (unrecognized format)',
+      detect: function (text) {
+        var out = [];
+        var re = /\b[A-Za-z0-9_\-]{24,}\b/g, m;
+        while ((m = re.exec(text)) !== null) {
+          var s = m[0];
+          if (!/[a-z]/.test(s) || !/[A-Z]/.test(s) || !/\d/.test(s)) continue; // mixed case + digits
+          if (/(.)\1{4,}/.test(s)) continue; // repeated runs are not keys
+          out.push({ index: m.index, match: s });
+          if (out.length >= 5) break;
+        }
+        return out;
+      } },
+
     // ---- PII ----
+    { id: 'personal-fact-named', category: 'pii', severity: 'medium', tentative: true, label: 'Personal detail named in plain language',
+      pattern: /\b(?:my|her|his|their|our)\s+(?:salary|compensation|date of birth|birthday|social security|ssn|passport|driver'?s?\s*license|medical record|diagnosis|prescription|home address)\b\s*(?:is|=|:)\s*[^\s,;]{2,}/gi },
     { id: 'ssn', category: 'pii', severity: 'critical', label: 'US Social Security number',
       pattern: /\b\d{3}-\d{2}-\d{4}\b/g },
     { id: 'email-address', category: 'pii', severity: 'medium', label: 'Email address',
@@ -118,6 +142,23 @@
     return [];
   }
 
+  var SENSITIVE_PHRASES = ['confidential', 'internal use only', 'internal only', 'do not share',
+    'do not distribute', 'not for distribution', 'proprietary', 'trade secret', 'restricted',
+    'classified', 'under nda', 'non-disclosure', 'need to know', 'off the record', 'private and confidential'];
+
+  function detectSensitiveContext(text) {
+    var lower = text.toLowerCase();
+    var hits = [];
+    for (var i = 0; i < SENSITIVE_PHRASES.length; i++) {
+      var idx = lower.indexOf(SENSITIVE_PHRASES[i]);
+      if (idx !== -1) hits.push(idx);
+    }
+    if (hits.length >= 1 && text.length > 20) {
+      return [{ index: hits[0], match: text.slice(hits[0], hits[0] + 120) + '\u2026', heuristic: true }];
+    }
+    return [];
+  }
+
   function luhnValid(digits) {
     var sum = 0, dbl = false;
     for (var i = digits.length - 1; i >= 0; i--) {
@@ -160,7 +201,8 @@
           index: matches[i].index,
           length: matches[i].match.length,
           masked: maskSnippet(matches[i].match),
-          heuristic: false
+          heuristic: false,
+          tentative: !!rule.tentative
         });
       }
     }
@@ -169,13 +211,19 @@
     for (var c = 0; c < code.length; c++) {
       findings.push({ ruleId: 'proprietary-source', category: 'source', severity: 'high',
         label: 'Proprietary source code', index: code[c].index, length: 0,
-        masked: maskSnippet(code[c].match), heuristic: true });
+        masked: maskSnippet(code[c].match), heuristic: true, tentative: false });
     }
     var contract = detectContract(text);
     for (var k = 0; k < contract.length; k++) {
       findings.push({ ruleId: 'contract-language', category: 'contract', severity: 'medium',
         label: 'Contract or legal language', index: contract[k].index, length: 0,
-        masked: maskSnippet(contract[k].match), heuristic: true });
+        masked: maskSnippet(contract[k].match), heuristic: true, tentative: false });
+    }
+    var sens = detectSensitiveContext(text);
+    for (var s = 0; s < sens.length; s++) {
+      findings.push({ ruleId: 'sensitive-context', category: 'sensitive', severity: 'low',
+        label: 'Confidential or restricted context', index: sens[s].index, length: 0,
+        masked: maskSnippet(sens[s].match), heuristic: true, tentative: true });
     }
     // De-duplicate overlapping identical spans
     findings.sort(function (a, b) { return a.index - b.index || SEVERITY_ORDER[b.severity] - SEVERITY_ORDER[a.severity]; });

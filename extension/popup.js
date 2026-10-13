@@ -1,12 +1,13 @@
 (function(){
 'use strict';
-var defaults={secrets:'block',pii:'warn',financial:'warn',source:'warn',contract:'warn'};
+var defaults={secrets:'block',pii:'warn',financial:'warn',source:'warn',contract:'warn',sensitive:'warn'};
 var metadata={
  secrets:['Secrets & credentials','API keys, passwords, tokens'],
  pii:['Personal data','SSNs, cards, emails, phones'],
  financial:['Financial data','Banking and company figures'],
  source:['Source code','Code-density detection'],
- contract:['Contracts & legal','Sensitive agreement language']
+ contract:['Contracts & legal','Sensitive agreement language'],
+ sensitive:['Sensitive context','Confidential/proprietary markers, partial keys, named credentials']
 };
 var actions=['allow','warn','redact','block'];
 var root=document.getElementById('policies');
