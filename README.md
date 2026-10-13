@@ -52,11 +52,11 @@ The installable Manifest V3 extension is in [`extension/`](extension/README.md).
 
 The root of this repo is a static web app (`index.html`, `styles.css`, `detectors.js`, `app.js`, `assessment.js`) that runs the same checks on pasted text and attached files.
 
-1. **Firewall tab:** paste a prompt or attach text files, then press **Inspect locally** (or Ctrl/Cmd + Enter in the prompt box). Dato shows what it found and what your policy says to do.
-2. **Policies tab:** set Allow / Warn / Redact / Block for each data class and inspect again to see the verdict change. **Reset everything** restores defaults and clears the log.
-3. **Audit log tab:** filter events, export them as JSON, or clear them.
-4. **Risk dashboard tab:** totals and charts computed from the log.
-5. **Get the extension tab:** download `dato-extension.zip` and follow the install steps for Chrome.
+1. **Extension tab (opens first):** download `dato-extension.zip` and follow the install steps for Chrome.
+2. **Firewall tab:** paste a prompt or attach text files, then press **Inspect locally** (or Ctrl/Cmd + Enter in the prompt box). Dato shows what it found and what your policy says to do.
+3. **Policies tab:** set Allow / Warn / Redact / Block for each data class and inspect again to see the verdict change. **Reset everything** restores defaults and clears the log.
+4. **Audit log tab:** filter events, export them as JSON, or clear them.
+5. **Risk dashboard tab:** totals and charts computed from the log.
 
 Empty or invalid input (nothing to inspect, file over 2 MB, unreadable file) shows a message in the page. Nothing uses pop-up dialogs.
 
