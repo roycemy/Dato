@@ -56,6 +56,7 @@ The root of this repo is a static web app (`index.html`, `styles.css`, `detector
 2. **Policies tab:** set Allow / Warn / Redact / Block for each data class and inspect again to see the verdict change. **Reset everything** restores defaults and clears the log.
 3. **Audit log tab:** filter events, export them as JSON, or clear them.
 4. **Risk dashboard tab:** totals and charts computed from the log.
+5. **Get the extension tab:** download `dato-extension.zip` and follow the install steps for Chrome.
 
 Empty or invalid input (nothing to inspect, file over 2 MB, unreadable file) shows a message in the page. Nothing uses pop-up dialogs.
 
