@@ -31,7 +31,7 @@
   }
 
   // ---------- Navigation ----------
-  var views = ['firewall', 'policies', 'activity', 'dashboard', 'assessment'];
+  var views = ['firewall', 'policies', 'activity', 'dashboard', 'install', 'assessment'];
   function showView(name) {
     views.forEach(function (v) {
       document.getElementById('view-' + v).classList.toggle('active', v === name);
